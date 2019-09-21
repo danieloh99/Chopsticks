@@ -171,19 +171,28 @@ class AI(Player):
 		return True
 
 	def get_valid_splits(self, current_state, index_offset):
-		#return None
+		return None
 		cur_left = current_state[0 + index_offset]
 		cur_right = current_state[1 + index_offset]
 		sum_hands = cur_left + cur_right
-		if sum_hands==1 or sum_hands>=7:
+		if not ((sum_hands==2 or sum_hands==4) and (cur_left==0 or cur_right==0)):
 			return None
-
 		valid_splits = list(self.sum_to_valid_splits.get(sum_hands))
 		#print("get_valid_splits: current_state: %s\tcur_left and cur_right: %s, %s\tvalid_splits: %s" % (current_state, cur_left, cur_right, valid_splits))
 		if (cur_left, cur_right) in valid_splits:
 			valid_splits.remove((cur_left, cur_right))
 		else : valid_splits.remove((cur_right, cur_left))
 		return tuple(valid_splits)
+
+		# if sum_hands==1 or sum_hands>=7:
+		# 	return None
+		#
+		# valid_splits = list(self.sum_to_valid_splits.get(sum_hands))
+		# #print("get_valid_splits: current_state: %s\tcur_left and cur_right: %s, %s\tvalid_splits: %s" % (current_state, cur_left, cur_right, valid_splits))
+		# if (cur_left, cur_right) in valid_splits:
+		# 	valid_splits.remove((cur_left, cur_right))
+		# else : valid_splits.remove((cur_right, cur_left))
+		# return tuple(valid_splits)
 
 	def handle_attack(self, current_state, index_offset, attack_type):
 		attack_hand_index = 0 + index_offset \
@@ -225,6 +234,14 @@ class AI(Player):
 		current_state[hand_indices[1]] = hand_values[1]
 		current_state[4] = not current_state[4]
 
+	def get_normalized_state(self, current_state):
+		norm_state = (min(current_state[0], current_state[1]),
+			max(current_state[0], current_state[1]),
+			min(current_state[2], current_state[3]),
+			max(current_state[2], current_state[3]),
+			current_state[4])
+		return norm_state
+
 	def minimax(self, current_state, seen_states, depth):
 		"""Determines the best move given the current case.
 		A case is defined as the current set of hands the AI and player have
@@ -249,13 +266,17 @@ class AI(Player):
 		if current_state[0] == current_state[1] == 0:
 			#print("minimax: returning -1, depth: %s" % depth)
 			return -1
-		if tuple(current_state) in seen_states:
-			print("minimax: returning 0, depth: %s" % depth)
+		normalized_state = self.get_normalized_state(current_state)
+		if normalized_state in seen_states:
+			#print("minimax: returning 0, current_state: %s\tdepth: %s" % (current_state, depth))
 			return 0
 
+		# if depth >= 3:
+		# 	print("minimax: returning 0, depth: %s" % depth)
+		# 	return 0
+
 		# Reaching this point means that we haven't gotten to an end yet.
-		seen_states.add(tuple(current_state))
-		print("minimax: depth %s\t seen_states %s\t" % (depth, seen_states))
+		seen_states.add(normalized_state)
 		ai_turn = current_state[4]
 		min_or_max = None
 
@@ -276,36 +297,39 @@ class AI(Player):
 		#
 		# Repeat but for all of the valid splits.
 
-		#print("\nminimax: state before attack for loop: %s\tdepth: %s" % (current_state, depth))
+		#print("\nminimax: depth: %s\tstate: %s" % (depth, current_state))
+
+		current_depth_seen_states = set()  # add state after handling attack if not previously seen at that depth.
 
 		for attack_type in self.all_attacks:
-			#print("minimax: analyzing attack_type: %s\t ai_turn: %s\t state: %s\tdepth: %s" % (attack_type, ai_turn, current_state, depth))
 			if not self.is_valid_attack(current_state,
-					index_offset, attack_type):  # TODO: must be overloaded
-				#print("\tminimax: invalid attack. moving on.")
+					index_offset, attack_type):
 				continue
+			#print("minimax: depth: %s\t seen_states: %s\t\n\t current_depth_seen_states: %s" % (depth, seen_states, current_depth_seen_states))
+
+			#print("minimax: depth: %s\t analyzing attack_type: %s\t ai_turn: %s\t state: %s" % (depth, attack_type, ai_turn, current_state))
 			target_orig_index_and_value = self.handle_attack(current_state, index_offset, attack_type)
+
+			next_norm_state = self.get_normalized_state(current_state)
+			if next_norm_state in current_depth_seen_states:
+				#print("minimax: TRIGGER. same attack result seen before. Continuing.")
+				self.undo_attack(current_state, target_orig_index_and_value[0], target_orig_index_and_value[1])
+				continue
+			else:
+				current_depth_seen_states.add(next_norm_state)
+
 			#print("minimax: state post attack: %s" % current_state)
+
 			best_score = min_or_max(best_score,
-							self.minimax(current_state, deepcopy(seen_states), depth + 1))
+							self.minimax(current_state, seen_states, depth + 1))
+
+			if next_norm_state in seen_states:
+				seen_states.remove(next_norm_state)
+
 			self.undo_attack(current_state, target_orig_index_and_value[0], target_orig_index_and_value[1])
-			#print("minimax: done attack_type: %s\tai_turn: %s\tstate: %s\tdepth: %s\tbest score: %s" % (attack_type, ai_turn, current_state, depth, best_score))
 
-		# Determine the valid splits given the AI's hands  # new helper function
-		valid_splits = self.get_valid_splits(current_state, index_offset)  # TODO: write new helper function
-		if valid_splits is not None:
-			#print("\nminimax: state before split for loop: %s\tdepth: %s\tvalid_splits: %s" % (current_state, depth, valid_splits))
-			for curr_split in valid_splits:
-				#print("minimax: analyzing split_type: %s\t ai_turn: %s\t state: %s\tdepth: %s" % (curr_split, ai_turn, current_state, depth))
-				orig_hands_indices_and_values = self.handle_split(current_state, index_offset, curr_split)  # TODO: must be overloaded, return tuple
-				#print("minimax: state post split: %s" % current_state)
-
-				best_score = min_or_max(best_score,
-								self.minimax(current_state, deepcopy(seen_states), depth + 1))
-				self.undo_split(current_state,
-					orig_hands_indices_and_values[0],
-					orig_hands_indices_and_values[1])
-				#print("minimax: done split_type: %s\tai_turn: %s\tstate: %s\tdepth: %s\tbest score: %s" % (curr_split, ai_turn, current_state, depth, best_score))
+		# Determine the valid splits given the AI's hands
+		# insert code here
 
 		#print("minimax: finished comparing moves. depth: %s\t best_score: %s" % (depth, best_score))
 		return best_score
@@ -320,50 +344,43 @@ class AI(Player):
 		best_score = -2
 		current_state = [self.left, self.right,
 			self.opponent.left, self.opponent.right, True]
-		#next_state = current_state  # deep copy
 
-		if tuple(current_state) not in self.seen_states:
-			self.seen_states.add(tuple(current_state))
+		normalized_state = self.get_normalized_state(current_state)
+		if normalized_state not in self.seen_states:
+			self.seen_states.add(normalized_state)
 		seen_states = deepcopy(self.seen_states)  # deep copy
 
 		#print("get_move: seen_states %s" % (self.seen_states,))
+		current_depth_seen_states = set()  # add state after handling attack if not previously seen at that depth.
+
 		for attack_type in self.all_attacks:
-			print("get_move: current_state: %s" % current_state)
-			print("get_move: checking attack: %s" % (attack_type,))
+			#print("get_move: current_state: %s" % current_state)
+			#print("get_move: checking attack: %s" % (attack_type,))
 			if not self.is_valid_attack(current_state, 0, attack_type):
 				continue
+
+			#print("get_move: seen_states before attack %s" % (seen_states,))
+
 			target_orig_index_and_value = self.handle_attack(current_state, 0, attack_type)  # next_state gets modified after this.
-			print("get_move: state post handle_attack: %s" % current_state)
+
+			next_norm_state = self.get_normalized_state(current_state)
+			if next_norm_state in current_depth_seen_states:
+				#print("get_move: TRIGGER. same attack result seen before. Continuing...")
+				# undo the attack and continue to the next attack
+				self.undo_attack(current_state, target_orig_index_and_value[0], target_orig_index_and_value[1])
+				continue
+			else:
+				current_depth_seen_states.add(next_norm_state)
+
 			move_score = self.minimax(current_state, seen_states, 0)
-			print("get_move: state post minimax: %s" % current_state)
-			print("get_move: seen_states %s" % (self.seen_states,))
 
 			if move_score > best_score:
 				best_move_type = 'a'
 				best_move = attack_type
 				best_score = move_score
-			#print("get_move: best minimax score so far: %s" % best_score)
 			self.undo_attack(current_state, target_orig_index_and_value[0], target_orig_index_and_value[1])
-			print("get_move: state post undo_attack: %s\n" % current_state)
 
-		valid_splits = self.get_valid_splits(current_state, 0)  # TODO: write new helper function
-		if valid_splits is not None:
-			#print("minimax: current_state %s\tvalid splits: %s\tdepth %s" % (current_state, valid_splits, depth))
-			for curr_split in valid_splits:
-				print("get_move: current_state: %s" % current_state)
-				print("get_move: checking split: %s" % (curr_split,))
-				orig_hands_indices_and_values = self.handle_split(current_state, 0, curr_split)  # TODO: must be overloaded, return tuple
-				print("get_move: state post handle_split: %s" % current_state)
-				move_score = self.minimax(current_state, seen_states, 0)
-				if move_score > best_score:
-					best_move_type = 's'
-					best_move = curr_split
-					best_score = move_score
-				self.undo_split(current_state,
-					orig_hands_indices_and_values[0],
-					orig_hands_indices_and_values[1])
-				print("get_move: state post undo_split: %s\n" % current_state)
-
+		#insert split code Here
 		move = [best_move_type, best_move[0], best_move[1]]
 		return move
 
@@ -421,8 +438,8 @@ class Game:
 							+ " hand to attack the " + target_hand + " hand."
 		else:
 			prev_move_msg = prev_player + " SPLIT. Their new left hand is " \
-							+ self.previous_move[1] + " and their right hand is " \
-							+ self.previous_move[2] + "."
+							+ str(self.previous_move[1]) + " and their right hand is " \
+							+ str(self.previous_move[2]) + "."
 		print(prev_move_msg)
 
 

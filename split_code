@@ -1,0 +1,46 @@
+MINIMAX PART
+
+valid_splits = self.get_valid_splits(current_state, index_offset)
+if valid_splits is not None:
+  print("\nminimax: state before split for loop: %s\tdepth: %s\tvalid_splits: %s" % (current_state, depth, valid_splits))
+  for curr_split in valid_splits:
+    print("minimax: analyzing split_type: %s\t ai_turn: %s\t state: %s\tdepth: %s" % (curr_split, ai_turn, current_state, depth))
+    orig_hands_indices_and_values = self.handle_split(current_state, index_offset, curr_split)
+    print("minimax: state post split: %s" % current_state)
+
+    already_in = False
+    next_norm_state = self.get_normalized_state(current_state)
+    if next_norm_state in seen_states : already_in = True
+    print("minimax: depth: %s\t seen_states before call: %s\t" % (depth, seen_states))
+    best_score = min_or_max(best_score,
+            self.minimax(current_state, seen_states, depth + 1))
+    print("minimax: depth: %s\t seen_states after call1: %s\t" % (depth, seen_states))
+    if (next_norm_state in seen_states) and (not already_in):
+      print("minimax: depth: %s\tseen_states should be fixed to be same as before call" % depth)
+      seen_states.remove(next_norm_state)
+      print("minimax: depth: %s\t seen_states after call2: %s\t" % (depth, seen_states))
+
+    self.undo_split(current_state,
+      orig_hands_indices_and_values[0],
+      orig_hands_indices_and_values[1])
+    print("minimax: done split_type: %s\tai_turn: %s\tstate: %s\tdepth: %s\tbest score: %s" % (curr_split, ai_turn, current_state, depth, best_score))
+
+GET_MOVE PART
+
+valid_splits = self.get_valid_splits(current_state, 0)
+if valid_splits is not None:
+  #print("minimax: current_state %s\tvalid splits: %s\tdepth %s" % (current_state, valid_splits, depth))
+  for curr_split in valid_splits:
+    print("get_move: current_state: %s" % current_state)
+    print("get_move: checking split: %s" % (curr_split,))
+    orig_hands_indices_and_values = self.handle_split(current_state, 0, curr_split)
+    print("get_move: state post handle_split: %s" % current_state)
+    move_score = self.minimax(current_state, seen_states, 0)
+    if move_score > best_score:
+      best_move_type = 's'
+      best_move = curr_split
+      best_score = move_score
+    self.undo_split(current_state,
+      orig_hands_indices_and_values[0],
+      orig_hands_indices_and_values[1])
+    print("get_move: state post undo_split: %s\n" % current_state)
