@@ -9,6 +9,7 @@ class Player:
 		self.right = 1
 		self.id = id
 		self.opponent = None
+
 	def setup(self):
 		self.opponent = self.game_world.p2 \
 			if self.id == 1 else self.game_world.p1
@@ -387,9 +388,7 @@ class AI(Player):
 class Game:
 	def __init__(self):
 		self.p1 = Player(self, 1)
-		self.p2 = AI(self, 2)
-		self.p1.setup()
-		self.p2.setup()
+		self.p2 = None
 		self.p1_turn = True
 		self.previous_move = None
 		self.rules = "---------RULES---------\n" \
@@ -404,7 +403,21 @@ class Game:
 		print("Welcome to Chopsticks! Please read the rules below before " +
 				"playing!\n")
 		print(self.rules)
-		input("Press ENTER to start the game!")
+		while True:
+			type_of_opponent = input("Would you like to play against another "
+                                     "player or a computer? [p or c]: ")
+			if type_of_opponent == 'p':
+				self.p2 = Player(self, 2)
+				break
+			elif type_of_opponent == 'c':
+				self.p2 = AI(self, 2)
+				break
+			else:
+				print("Error. Invalid input.\n")
+		self.p1.setup()
+		self.p2.setup()
+
+		input("Okay! Press ENTER to start the game!")
 
 	def display(self):
 		print("")
@@ -418,7 +431,7 @@ class Game:
 		else:  # for mac and linux (here, os.name is 'posix')
 			system('clear')
 
-	# function may not be necessary. used to print description of previous move.
+	# Used to print description of the last move.
 	def print_previous_move(self):
 		prev_player = None
 		prev_opponent = None
