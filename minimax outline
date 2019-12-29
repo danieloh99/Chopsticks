@@ -1,0 +1,10 @@
+Want to use dynamic programming. If you previously calculated that the
+state you're in now leads to loss, it shouldn't recalculate. It should
+just immediately return loss. Same with tie and win.
+
+if player's hands are 0:
+    return 1 (AI win)
+if AI's hands are 0
+    return -1 (Player win)
+if current state has been seen before in the current path
+    return 0
